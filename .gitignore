@@ -137,3 +137,8 @@ Thumbs.db
 
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
+.trunk/configs/.markdownlint.yaml
+.trunk/configs/.yamllint.yaml
+.trunk/configs/ruff.toml
+.trunk/.gitignore
+.trunk/configs/.isort.cfg
