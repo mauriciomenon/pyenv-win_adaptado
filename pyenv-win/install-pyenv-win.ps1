@@ -30,6 +30,8 @@ $PyEnvDir = "${env:USERPROFILE}\.pyenv"
 $PyEnvWinDir = "${PyEnvDir}\pyenv-win"
 $BinPath = "${PyEnvWinDir}\bin"
 $ShimsPath = "${PyEnvWinDir}\shims"
+$VersionFilePath = "${PyEnvDir}\.version"
+$PayloadVersionPath = Join-Path $PyEnvWinDir '.version'
     
 Function Remove-PyEnvVars() {
     $PathParts = [System.Environment]::GetEnvironmentVariable('PATH', "User") -Split ";"
@@ -52,7 +54,6 @@ Function Remove-PyEnv() {
 }
 
 Function Get-CurrentVersion() {
-    $VersionFilePath = "$PyEnvDir\.version"
     If (Test-Path $VersionFilePath) {
         $CurrentVersion = Get-Content $VersionFilePath
     }
@@ -157,6 +158,31 @@ Function Main() {
         # Fallback: if layout changes, copy only when pyenv-win exists at root
         if (Test-Path "$PyEnvDir\pyenv-win") { Copy-Item -Recurse -Force "$PyEnvDir\pyenv-win\*" $PyEnvWinDir }
     }
+
+    # Write version once into payload and point top-level .version to it via symlink when possible (or copy as fallback) to keep a single source of truth
+    $SourceVersionPath = Join-Path $PyEnvDir 'pyenv-win_adaptado-master\.version'
+    if (Test-Path $SourceVersionPath) {
+        Copy-Item -LiteralPath $SourceVersionPath -Destination $PayloadVersionPath -Force
+    } elseif ((Get-Variable -Name 'LatestVersion' -ErrorAction SilentlyContinue) -and $LatestVersion) {
+        Set-Content -Path $PayloadVersionPath -Value $LatestVersion -Encoding ASCII
+    } elseif (-not (Test-Path $PayloadVersionPath)) {
+        Set-Content -Path $PayloadVersionPath -Value "unknown" -Encoding ASCII
+    }
+
+    if (Test-Path $VersionFilePath) {
+        Remove-Item -LiteralPath $VersionFilePath -Force
+    }
+    try {
+        if (Test-Path $PayloadVersionPath) {
+            New-Item -ItemType SymbolicLink -Path $VersionFilePath -Target $PayloadVersionPath -Force | Out-Null
+        } else {
+            throw "Target version file does not exist"
+        }
+    } catch {
+        # If symlink is not allowed, fall back to copy
+        Copy-Item -LiteralPath $PayloadVersionPath -Destination $VersionFilePath -Force
+    }
+
     # Cleanup extracted tree and zip
     if (Test-Path "$PyEnvDir\pyenv-win_adaptado-master") { Remove-Item -Path "$PyEnvDir\pyenv-win_adaptado-master" -Recurse -Force }
     if (Test-Path "$PyEnvDir\pyenv-win") { Remove-Item -Path "$PyEnvDir\pyenv-win" -Recurse -Force -ErrorAction SilentlyContinue }
